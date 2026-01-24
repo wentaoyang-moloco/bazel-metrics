@@ -25,6 +25,14 @@ export function PackageExplorer({ packages, benchmarks = [], language = 'go' }: 
 
   const config = languageConfig[language];
 
+  // Reset page when language/packages change
+  const packagesKey = `${language}-${packages.length}`;
+  const [prevPackagesKey, setPrevPackagesKey] = useState(packagesKey);
+  if (packagesKey !== prevPackagesKey) {
+    setPage(0);
+    setPrevPackagesKey(packagesKey);
+  }
+
   // Create a map of path -> benchmark data for quick lookup
   const benchmarkMap = useMemo(() => {
     const map = new Map<string, PackageBenchmark>();
@@ -61,16 +69,20 @@ export function PackageExplorer({ packages, benchmarks = [], language = 'go' }: 
     });
 
     // Sort priority:
-    // 1. BUILD + bazelized tests (fully bazelized)
-    // 2. BUILD + test files but not bazelized
+    // 0. BUILD + test files + test targets (fully bazelized with local tests)
+    // 1. BUILD + test targets only (targets may reference external tests)
+    // 2. BUILD + test files but no test targets (unbazelized tests)
     // 3. BUILD only (no tests)
-    // 4. Alphabetically
-    return filtered.sort((a, b) => {
-      const getSortPriority = (pkg: typeof a) => {
-        if (pkg.hasBuildFile && pkg.goTestTargetCount > 0) return 0; // Fully bazelized
-        if (pkg.hasBuildFile && pkg.hasTestFiles) return 1; // BUILD + unbazelized tests
-        if (pkg.hasBuildFile) return 2; // BUILD only
-        return 3; // No BUILD
+    // 4. No BUILD
+    // Within each priority, sort alphabetically
+    return [...filtered].sort((a, b) => {
+      const getSortPriority = (pkg: PackageInfo) => {
+        // goTestTargetCount is used for all languages (go_test, py_test, rust_test)
+        if (pkg.hasBuildFile && pkg.goTestTargetCount > 0 && pkg.hasTestFiles) return 0; // Fully bazelized with local test files
+        if (pkg.hasBuildFile && pkg.goTestTargetCount > 0) return 1; // Has test targets but no local test files
+        if (pkg.hasBuildFile && pkg.hasTestFiles) return 2; // BUILD + test files but no test targets
+        if (pkg.hasBuildFile) return 3; // BUILD only
+        return 4; // No BUILD
       };
 
       const aPriority = getSortPriority(a);

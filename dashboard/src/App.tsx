@@ -22,9 +22,11 @@ function App() {
   const [activeLanguage, setActiveLanguage] = useState<Language>('go');
 
   useEffect(() => {
-    fetch('/metrics.json')
+    // Fetch from GCS (updated daily by scheduled job)
+    const gcsUrl = 'https://storage.googleapis.com/bazel-metrics-data/metrics.json';
+    fetch(gcsUrl)
       .then(res => {
-        if (!res.ok) throw new Error('Failed to load metrics.json');
+        if (!res.ok) throw new Error('Failed to load metrics from GCS');
         return res.json();
       })
       .then(data => {
